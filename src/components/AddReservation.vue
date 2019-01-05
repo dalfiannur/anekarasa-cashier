@@ -3,6 +3,8 @@
     v-toolbar( app class="primary" )
       v-btn( color="green" @click="onSave" )
         |Simpan
+      v-btn( color="orange" @click.native="$router.push('/')" )
+        |Batalkan
     v-content( app )
       v-container( fluid )
         v-layout( row wrap )

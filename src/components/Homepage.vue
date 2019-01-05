@@ -74,14 +74,20 @@
                         |delete
                 template( slot="pageText" slot-scope="{ pageStart, pageStop }" )
                   |Dari {{ pageStart }} sampai {{ pageStop }}
+      PrintLayout( :items="detailTable.items" :cash="cash" :total="totalTagihan" :invoice="invoice" id="print-layout" )
 </template>
 
 <script>
 import axios from 'axios'
+import { Printd } from 'printd'
+import io from 'socket.io-client'
+
 const url = process.env.API
 export default {
   data () {
     return {
+      socket: io.connect('192.168.43.3:8000'),
+      invoice: '',
       diskon: 0,
       cash: '',
       cashback: 0,
@@ -150,7 +156,60 @@ export default {
           }
         ],
         items: []
-      }
+      },
+      cssText: `
+        @page {
+          margin: 0;
+          size: 58mm auto;
+        }
+        #print-out {
+          font-family: 'Courier New', Courier, monospace
+        }
+        .w-100 {
+          width: 100%;
+        }
+        .font-8 {
+          font-size: 8px;
+        }
+        .text-right{
+          text-align: right;
+        }
+        .page {
+          width: 58mm;
+          padding: 0px 2mm;
+        }
+        .header {
+          font-size: 16px;
+          margin: 0px;
+          padding: 0px;
+          text-align: center;
+        }
+        .address {
+          margin: 0px;
+          padding; 0px;
+          font-size: 10px;
+          text-align: center;
+          text-transform: uppercase;
+          border-bottom: 1px solid black;
+        }
+        table {
+          width: 100%;
+          font-size: 12px;
+        }
+        .item {
+          text-transform: uppercase;
+          font-family:'Courier New', Courier, monospace
+          font-size: 10px;
+        }
+        .signature-title {
+          text-align: center;
+          font-size: 10px;
+          text-transform: uppercase;
+        }
+        .bold {
+          font-weight: bold;
+        }
+      `
     }
   },
 
@@ -161,6 +220,11 @@ export default {
   },
 
   created () {
+    this.socket.on('connect', () => {
+      this.socket.on('reload', () => {
+        this.loadOrders()
+      })
+    })
     this.loadProducts()
   },
 
@@ -187,6 +251,7 @@ export default {
         this.diskon = response.data[0].disc
         let cash = response.data[0].cash
         if (cash > 0) this.cash = response.data[0].cash
+        this.invoice = response.data[0].number
       })
       this.countTotalTagihan()
       this.showDetail = true
@@ -215,9 +280,15 @@ export default {
         await axios.post(`${url}/cashier/report/${this.detailTable.items[0].number}/done`, data).then(() => {
           return true
         })
+        this.onPrint()
         this.loadOrders()
         this.showDetail = false
       }
+    },
+
+    onPrint () {
+      const printd = new Printd()
+      printd.print(document.getElementById('print-out'), this.cssText)
     },
 
     async onAddProduct () {
@@ -249,6 +320,10 @@ export default {
       this.onDetail(number)
       this.countCashBack()
     }
+  },
+
+  components: {
+    PrintLayout: () => import('@/components/PrintLayout')
   }
 }
 </script>

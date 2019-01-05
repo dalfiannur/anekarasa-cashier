@@ -1,6 +1,5 @@
 <template lang="pug">
-  keep-alive
-    router-view
+  router-view
 </template>
 
 <script>

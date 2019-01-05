@@ -14,7 +14,7 @@
         p( class="address" )
           |Blangpidie
         table
-          tr( v-for="item in items" :key="item.id" v-if="item.quantity > 0" )
+          tr( v-for="item in items" :key="item.name" v-if="item.quantity > 0" )
             td
               div( class="item" )
                 |{{ item.quantity }} {{ item.product ? item.product : item.name }}
@@ -26,7 +26,7 @@
               td( colspan="3" class="text-right bold" )
                 |Total
               td( class="text-right bold" )
-                |{{ total }}
+                |{{ toCurrency(total) }}
             tr
               td( colspan="3" class="text-right" )
                 |Bayar
@@ -48,7 +48,7 @@
 </template>
 
 <script>
-import { toCurrency } from '@/libs/currency'
+import { toCurrency } from '@/lib/currency'
 export default {
   props: ['items', 'cash', 'total', 'invoice'],
   data () {
