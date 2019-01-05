@@ -1,6 +1,8 @@
 # cashier
 
-> Cashier for Aneka Rasa
+> Aplikasi Kasir untuk Rumah Makan Aneka Rasa (Blangpidie, Aceh Barat Daya)
+> Frontend: Vue.JS
+> Backend: https://github.com/dalfiannur/anekarasa-api (Express.js)
 
 ## Build Setup
 
