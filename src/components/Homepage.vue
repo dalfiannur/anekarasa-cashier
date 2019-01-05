@@ -2,12 +2,15 @@
   v-app( id="app" )
     v-toolbar( app class="primary" )
       v-btn( color="green" @click.native="$router.push('/add-reservation')" )
-        |Tambah Pesanan
+        |Pesanan Baru
     v-content( app )
       v-container( fluid )
         v-layout( row wrap )
           v-flex( md4 )
-            v-data-table( :headers="orderTable.headers" :items="orderTable.items" )
+            label
+              |Filter
+            v-select( :items="filterItems" v-model="filter" solo item-text="text" item-value="value" )
+            v-data-table( :headers="orderTable.headers" :items="filteredItems" )
               template( slot="items" slot-scope="props" )
                 td
                   |{{ props.item.number }}
@@ -19,7 +22,7 @@
                       |edit
               template( slot="pageText" slot-scope="{ pageStart, pageStop }" )
                 |Dari {{ pageStart }} sampai {{ pageStop }}
-          v-flex( md7 offset-md1 )
+          v-flex( md7 offset-md1 v-if="showDetail == true")
             v-layout( row wrap )
               v-flex( md3 )
                 label
@@ -34,27 +37,39 @@
                   |Kembalian
                 v-text-field( solo prefix="Rp" readonly v-model="cashback" )
             v-layout( row wrap )
-              flex( md6 )
+              v-flex( md5 )
                 label
                   |Pembayaran
-                v-text-field( solo prefix="Rp" v-model="cash" @keyup="countCashBack" )
-              v-flex( md5 offset-md1 style="padding-top: 22px" )
+                v-text-field( solo prefix="Rp" v-model="cash" @keyup="countCashBack" ref="cash" )
+              v-flex( md6 offset-md1 style="padding-top: 22px" v-if="filter === 0" )
                 v-btn( @click="onPrint" )
-                  |LUNAS
+                  |PRINT
+              v-flex( md6 offset-md1 style="padding-top: 22px" v-if="filter === 1" )
                 v-btn( @click="onSave" )
-                  |SIMPAN
-            v-data-table( :headers="detailTable.headers" :items="detailTable.items" )
+                  |LUNAS
+                v-btn( @click.native="addProduct = true" )
+                  |TAMBAH PESANAN
+            v-layout(row wrap v-if="addProduct == true" )
+              v-flex( md8 )
+                label
+                  |Nama Pesanan
+                v-autocomplete( :items="products" item-text="name" return-object @change="$refs.qty.focus();$refs.qty.reset()" solo v-model="product" )
+              v-flex( md3 offset-md1 )
+                label
+                  |Banyak
+                v-text-field( solo v-model="product.quantity" ref="qty" @keyup.enter="onAddProduct" )
+            v-data-table( :headers="detailTable.headers" :items="detailTable.items" v-if="filter === 1" )
                 template( slot="items" slot-scope="props" )
                   td
-                    |{{ props.item.product_name }}
+                    |{{ props.item.name }}
                   td
                     |{{ props.item.price }}
                   td
-                    v-edit-dialog( :return-value.sync="props.item.quantity" lazy persistent )
+                    v-edit-dialog( :return-value.sync="props.item.quantity" lazy persistent @save="onUpdateProduct(props.item.id, props.item.quantity)" )
                       |{{ props.item.quantity }}
                       v-text-field( slot="input" label="Banyak" v-model="props.item.quantity" single-line counter autofocus )
                   td( class="text-md-center" )
-                    v-btn( icon )
+                    v-btn( icon @click="onDeleteProduct(props.item.id)" )
                       v-icon
                         |delete
                 template( slot="pageText" slot-scope="{ pageStart, pageStop }" )
@@ -68,9 +83,26 @@ export default {
   data () {
     return {
       diskon: 0,
-      cash: 0,
+      cash: '',
       cashback: 0,
       totalTagihan: 0,
+      addProduct: false,
+      showDetail: false,
+      filter: 1,
+      product: {
+        quantity: 0
+      },
+      products: [],
+      filterItems: [
+        {
+          text: 'Belum dibayar',
+          value: 1
+        },
+        {
+          text: 'Sudah dibayar',
+          value: 0
+        }
+      ],
       orderTable: {
         headers: [
           {
@@ -122,11 +154,27 @@ export default {
     }
   },
 
+  computed: {
+    filteredItems () {
+      return this.orderTable.items.filter(item => item.active === this.filter)
+    }
+  },
+
+  created () {
+    this.loadProducts()
+  },
+
   mounted () {
     this.loadOrders()
   },
 
   methods: {
+    loadProducts () {
+      axios.get(url + '/cashier/product').then(response => {
+        this.products = response.data
+      })
+    },
+
     loadOrders () {
       axios.get(url + '/cashier/report').then(response => {
         this.orderTable.items = response.data
@@ -137,8 +185,12 @@ export default {
       await axios.get(`${url}/cashier/report/${number}/detail`).then(response => {
         this.detailTable.items = response.data
         this.diskon = response.data[0].disc
+        let cash = response.data[0].cash
+        if (cash > 0) this.cash = response.data[0].cash
       })
       this.countTotalTagihan()
+      this.showDetail = true
+      this.$refs.cash.focus()
     },
 
     countTotalTagihan () {
@@ -147,18 +199,55 @@ export default {
         total += item.quantity * item.price
       })
       this.totalTagihan = total - ((this.diskon / 100) * total)
+      this.countCashBack()
     },
 
     countCashBack () {
       this.cashback = this.cash - this.totalTagihan
     },
 
-    onSave () {
-      axios.put(`${url}/cashier/report/:id/update`, this.detailTable.items)
+    async onSave () {
+      if (this.cash > 0) {
+        let data = {
+          cash: this.cash,
+          disc: this.diskon
+        }
+        await axios.post(`${url}/cashier/report/${this.detailTable.items[0].number}/done`, data).then(() => {
+          return true
+        })
+        this.loadOrders()
+        this.showDetail = false
+      }
     },
 
-    onPrint () {
-      this.onSave()
+    async onAddProduct () {
+      let number = this.detailTable.items[0].number
+      if (this.product.quantity > 0) {
+        await axios.post(`${url}/cashier/report/${number}/create`, this.product).then(() => {
+          return true
+        })
+        this.onDetail(number)
+        this.countCashBack()
+        this.addProduct = false
+      }
+    },
+
+    async onDeleteProduct (id) {
+      let number = this.detailTable.items[0].number
+      await axios.post(`${url}/cashier/report/${number}/delete/${id}`).then(() => {
+        return true
+      })
+      this.onDetail(number)
+      this.countCashBack()
+    },
+
+    async onUpdateProduct (id, quantity) {
+      let number = this.detailTable.items[0].number
+      await axios.post(`${url}/cashier/report/${number}/update/${id}`, { quantity }).then(() => {
+        return true
+      })
+      this.onDetail(number)
+      this.countCashBack()
     }
   }
 }
