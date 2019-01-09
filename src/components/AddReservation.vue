@@ -13,11 +13,11 @@
               v-flex( md8 )
                 label
                   |Nama Pesanan
-                v-autocomplete( solo :items="products" item-text="name" return-object @change="$refs.qty.focus();$refs.qty.reset()" v-model="product" ref="product" )
+                v-autocomplete( solo :items="products" item-text="name" return-object @change="$refs.quantity.focus();$refs.quantity.reset()" v-model="product" ref="product" )
               v-flex( md3 offset-md1 )
                 label
                   |Banyak Pesanan
-                v-text-field( solo ref="qty" v-model="product.quantity" @keyup.enter="addProduct" )
+                v-text-field( solo ref="quantity" v-model="product.quantity" @keyup.enter="addItem" )
           v-flex( md6 offset-md1 )
             v-layout( row wrap )
               v-flex( md3 )
@@ -45,7 +45,7 @@
                         |{{ props.item.quantity }}
                         v-text-field( slot="input" label="Banyak" v-model="props.item.quantity" single-line counter autofocus )
                     td( class="text-xs-right" )
-                      v-btn( icon )
+                      v-btn( icon @click="removeItem(props.item)" )
                         v-icon
                           |delete
                   template( slot="pageText" slot-scope="{ pageStart, pageStop }" )
@@ -129,11 +129,17 @@ export default {
       })
     },
 
-    addProduct () {
+    addItem () {
       if (this.product.quantity > 0) {
         this.tableReservation.items.push(this.product)
         this.countTotalTagihan()
       }
+    },
+
+    removeItem (product) {
+      this.tableReservation.items = this.tableReservation.items.filter(item => {
+        return item.id === product.id
+      })
     },
 
     countTotalTagihan () {

@@ -10,19 +10,31 @@
             label
               |Filter
             v-select( :items="filterItems" v-model="filter" solo item-text="text" item-value="value" )
-            v-data-table( :headers="orderTable.headers" :items="filteredItems" )
-              template( slot="items" slot-scope="props" )
-                td
-                  |{{ props.item.number }}
-                td( class="text-xs-right" )
-                  |{{ props.item.table_id }}
-                td( class="text-xs-right" )
-                  v-btn( icon @click="onDetail(props.item.number)" )
-                    v-icon
-                      |edit
-              template( slot="pageText" slot-scope="{ pageStart, pageStop }" )
-                |Dari {{ pageStart }} sampai {{ pageStop }}
-          v-flex( md7 offset-md1 v-if="showDetail == true")
+            template( v-if="filter === 0 || filter === 1" )
+              v-data-table( :headers="orderTable.headers" :items="filteredItems" )
+                template( slot="items" slot-scope="props" )
+                  td
+                    |{{ props.item.number }}
+                  td( class="text-xs-right" )
+                    |{{ parseDate(props.item.created_at) }}
+                  td( class="text-xs-right" )
+                    v-btn( icon @click="onDetail(props.item.number)" )
+                      v-icon
+                        |edit
+                template( slot="pageText" slot-scope="{ pageStart, pageStop }" )
+                  |Dari {{ pageStart }} sampai {{ pageStop }}
+            template( v-if="filter === 2" )
+              v-data-table( :headers="reservationTable.headers" :items="filteredItems" )
+                template( slot="items" slot-scope="props" )
+                  td
+                    |{{ props.item.table_id }}
+                  td( class="text-xs-right" )
+                    |{{ parseDate(props.item.created_at) }}
+                  td( class="text-xs-right" )
+                    v-btn( icon @click="onDetail(props.item.table_id)" )
+                      v-icon
+                        |edit
+          v-flex( md7 offset-md1 v-if="showDetail == true" )
             v-layout( row wrap )
               v-flex( md3 )
                 label
@@ -31,7 +43,7 @@
               v-flex( md2 offset-md1 )
                 label
                   |Diskon
-                v-text-field( solo suffix="%" v-model="diskon" @keyup.enter="countTotalTagihan();countCashBack()" )
+                v-text-field( solo suffix="%" v-model="diskon" @keyup.enter="countTotalTagihan();countCashBack()" :readonly="filter === 0 ? true : false" )
               v-flex( md3 offset-md1 )
                 label
                   |Kembalian
@@ -40,11 +52,11 @@
               v-flex( md5 )
                 label
                   |Pembayaran
-                v-text-field( solo prefix="Rp" v-model="cash" @keyup="countCashBack" ref="cash" )
+                v-text-field( solo prefix="Rp" v-model="cash" @keyup="countCashBack" @keyup.enter="onSave" :readonly="filter === 0 ? true : false" )
               v-flex( md6 offset-md1 style="padding-top: 22px" v-if="filter === 0" )
                 v-btn( @click="onPrint" )
                   |PRINT
-              v-flex( md6 offset-md1 style="padding-top: 22px" v-if="filter === 1" )
+              v-flex( md6 offset-md1 style="padding-top: 22px" v-if="filter > 0" )
                 v-btn( @click="onSave" )
                   |LUNAS
                 v-btn( @click.native="addProduct = true" )
@@ -58,7 +70,7 @@
                 label
                   |Banyak
                 v-text-field( solo v-model="product.quantity" ref="qty" @keyup.enter="onAddProduct" )
-            v-data-table( :headers="detailTable.headers" :items="detailTable.items" v-if="filter === 1" )
+            v-data-table( :headers="detailTable.headers" :items="detailTable.items" v-if="filter > 0" )
                 template( slot="items" slot-scope="props" )
                   td
                     |{{ props.item.name }}
@@ -101,7 +113,11 @@ export default {
       products: [],
       filterItems: [
         {
-          text: 'Belum dibayar',
+          text: 'Pemesanan Pelayan',
+          value: 2
+        },
+        {
+          text: 'Pemesanan Langsung',
           value: 1
         },
         {
@@ -118,10 +134,10 @@ export default {
             value: 'number'
           },
           {
-            text: 'No Meja',
+            text: 'Waktu Pemesanan',
             align: 'center',
             sortable: true,
-            value: 'table_id'
+            value: 'created_at'
           },
           {
             text: '',
@@ -156,6 +172,26 @@ export default {
           }
         ],
         items: []
+      },
+      reservationTable: {
+        headers: [
+          {
+            text: 'No Meja',
+            align: 'center',
+            sortable: true,
+            value: 'table_id'
+          },
+          {
+            text: 'Waktu Pemesanan',
+            align: 'center',
+            sortable: true,
+            value: 'created_at'
+          },
+          {
+            text: '',
+            value: ''
+          }
+        ]
       },
       cssText: `
         @page {
@@ -215,7 +251,9 @@ export default {
 
   computed: {
     filteredItems () {
-      return this.orderTable.items.filter(item => item.active === this.filter)
+      return this.orderTable.items.filter(item => {
+        return item.active === this.filter
+      })
     }
   },
 
@@ -233,6 +271,10 @@ export default {
   },
 
   methods: {
+    parseDate (date) {
+      return date.replace('T', ' ').replace('.000Z', '')
+    },
+
     loadProducts () {
       axios.get(url + '/cashier/product').then(response => {
         this.products = response.data
@@ -246,16 +288,33 @@ export default {
     },
 
     async onDetail (number) {
-      await axios.get(`${url}/cashier/report/${number}/detail`).then(response => {
-        this.detailTable.items = response.data
-        this.diskon = response.data[0].disc
-        let cash = response.data[0].cash
-        if (cash > 0) this.cash = response.data[0].cash
-        this.invoice = response.data[0].number
-      })
+      if (this.filter < 2) {
+        await axios.get(`${url}/cashier/report/${number}/detail`).then(response => {
+          this.detailTable.items = response.data
+          this.diskon = response.data[0].disc
+          let cash = response.data[0].cash
+          if (cash > 0) this.cash = response.data[0].cash
+          this.invoice = response.data[0].number
+        })
+      }
+
+      if (this.filter === 2) {
+        await axios.get(`${url}/cashier/reservation/${number}/detailReservation`).then(response => {
+          this.detailTable.items = response.data
+          if (response.data[0].number === null || response.data[0].number === '') {
+            axios.get(`${url}/cashier/invoice`).then(result => {
+              this.invoice = result.data
+              axios.put(`${url}/cashier/report/${response.data[0].table_id}/update`, { number: result.data })
+            })
+          } else {
+            this.invoice = response.data[0].number
+          }
+          this.diskon = 0
+        })
+      }
+
       this.countTotalTagihan()
       this.showDetail = true
-      this.$refs.cash.focus()
     },
 
     countTotalTagihan () {
@@ -292,14 +351,28 @@ export default {
     },
 
     async onAddProduct () {
-      let number = this.detailTable.items[0].number
-      if (this.product.quantity > 0) {
-        await axios.post(`${url}/cashier/report/${number}/create`, this.product).then(() => {
-          return true
-        })
-        this.onDetail(number)
-        this.countCashBack()
-        this.addProduct = false
+      if (this.filter < 2) {
+        let number = this.detailTable.items[0].number
+        if (this.product.quantity > 0) {
+          await axios.post(`${url}/cashier/report/${number}/create`, this.product).then(() => {
+            return true
+          })
+          this.onDetail(number)
+          this.countCashBack()
+          this.addProduct = false
+        }
+      }
+
+      if (this.filter === 2) {
+        let table = this.detailTable.items[0].table_id
+        if (this.product.quantity > 0) {
+          await axios.post(`${url}/cashier/report/${table}/createFromReservation`, this.product).then(() => {
+            return true
+          })
+          this.onDetail(table)
+          this.countCashBack()
+          this.addProduct = false
+        }
       }
     },
 
