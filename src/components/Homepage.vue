@@ -75,9 +75,11 @@
                   td
                     |{{ props.item.name }}
                   td
-                    |{{ props.item.price }}
+                    v-edit-dialog( :return-value="props.item.price" lazy persistent @save="onUpdateProduct(props.item.id, props.item.quantity, props.item.price)")
+                      |{{ props.item.price }}
+                      v-text-field( slot="input" label="Harga" v-model="props.item.price" single-line counter autofocus )
                   td
-                    v-edit-dialog( :return-value.sync="props.item.quantity" lazy persistent @save="onUpdateProduct(props.item.id, props.item.quantity)" )
+                    v-edit-dialog( :return-value.sync="props.item.quantity" lazy persistent @save="onUpdateProduct(props.item.id, props.item.quantity, props.item.price)" )
                       |{{ props.item.quantity }}
                       v-text-field( slot="input" label="Banyak" v-model="props.item.quantity" single-line counter autofocus )
                   td( class="text-md-center" )
@@ -385,9 +387,9 @@ export default {
       this.countCashBack()
     },
 
-    async onUpdateProduct (id, quantity) {
+    async onUpdateProduct (id, quantity, price) {
       let number = this.detailTable.items[0].number
-      await axios.post(`${url}/cashier/report/${number}/update/${id}`, { quantity }).then(() => {
+      await axios.post(`${url}/cashier/report/${number}/update/${id}`, { quantity, price }).then(() => {
         return true
       })
       this.onDetail(number)
